@@ -1,0 +1,1056 @@
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Miles AI Team Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0f;
+            overflow: hidden;
+            color: #fff;
+        }
+        
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0f;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.5s ease;
+        }
+        
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .loader {
+            width: 60px;
+            height: 60px;
+            border: 4px solid #1a1a2e;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #loading p {
+            margin-top: 20px;
+            color: #00d4ff;
+            font-size: 16px;
+            letter-spacing: 2px;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #agent-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background: rgba(15, 15, 25, 0.95);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 12px;
+            padding: 24px;
+            z-index: 100;
+            transform: translateX(400px);
+            transition: transform 0.4s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        #agent-panel.active {
+            transform: translateX(0);
+        }
+        
+        #agent-panel h2 {
+            color: #00d4ff;
+            margin-bottom: 16px;
+            font-size: 24px;
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+            padding-bottom: 10px;
+        }
+        
+        #agent-panel .role {
+            color: #888;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+        }
+        
+        #agent-panel .description {
+            color: #ccc;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        
+        #agent-panel .status {
+            margin-top: 16px;
+            padding: 10px 16px;
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        #agent-panel .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00ff88;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        #agent-panel .close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        
+        #agent-panel .close-btn:hover {
+            color: #fff;
+        }
+        
+        #title {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+        }
+        
+        #title h1 {
+            font-size: 28px;
+            color: #00d4ff;
+            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+        
+        #title p {
+            color: #888;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        
+        #legend {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(15, 15, 25, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 16px;
+            z-index: 100;
+        }
+        
+        #legend h3 {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+        
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+        
+        #instructions {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            color: #666;
+            font-size: 12px;
+            z-index: 100;
+        }
+        
+        /* Chat Panel Styles */
+        #chat-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 380px;
+            height: 500px;
+            background: rgba(15, 15, 25, 0.98);
+            border: 1px solid rgba(0, 212, 255, 0.3);
+            border-radius: 16px;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 212, 255, 0.1);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        
+        #chat-panel.minimized {
+            transform: translateY(calc(100% - 50px));
+            opacity: 0.9;
+        }
+        
+        #chat-header {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 212, 255, 0.05));
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+            cursor: pointer;
+        }
+        
+        #chat-header h3 {
+            color: #00d4ff;
+            font-size: 15px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .chat-status {
+            width: 8px;
+            height: 8px;
+            background: #00ff88;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 8px #00ff88;
+        }
+        
+        .chat-controls {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .chat-controls button {
+            background: none;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 16px;
+            transition: color 0.2s;
+            padding: 4px;
+        }
+        
+        .chat-controls button:hover {
+            color: #fff;
+        }
+        
+        #chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        #chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #chat-messages::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        #chat-messages::-webkit-scrollbar-thumb {
+            background: rgba(0, 212, 255, 0.3);
+            border-radius: 3px;
+        }
+        
+        .chat-message {
+            display: flex;
+            gap: 12px;
+            animation: messageSlide 0.3s ease;
+        }
+        
+        @keyframes messageSlide {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .chat-message.own {
+            flex-direction: row-reverse;
+        }
+        
+        .chat-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+            border: 2px solid;
+        }
+        
+        .chat-avatar.miles {
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border-color: #00d4ff;
+            color: #fff;
+        }
+        
+        .chat-avatar.nova {
+            background: linear-gradient(135deg, #ff6b6b, #cc4444);
+            border-color: #ff6b6b;
+            color: #fff;
+        }
+        
+        .chat-avatar.nexus {
+            background: linear-gradient(135deg, #4ecdc4, #3aa89f);
+            border-color: #4ecdc4;
+            color: #fff;
+        }
+        
+        .chat-avatar.wanda {
+            background: linear-gradient(135deg, #ffe66d, #d4b84a);
+            border-color: #ffe66d;
+            color: #333;
+        }
+        
+        .chat-avatar.group {
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            border-color: #a855f7;
+            color: #fff;
+        }
+        
+        .chat-content {
+            max-width: 75%;
+        }
+        
+        .chat-bubble {
+            padding: 10px 14px;
+            border-radius: 14px;
+            font-size: 13px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        
+        .chat-message:not(.own) .chat-bubble {
+            background: rgba(255, 255, 255, 0.08);
+            color: #e0e0e0;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .chat-message.own .chat-bubble {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 212, 255, 0.15));
+            color: #fff;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .chat-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+            font-size: 11px;
+        }
+        
+        .chat-message:not(.own) .chat-meta {
+            justify-content: flex-start;
+        }
+        
+        .chat-message.own .chat-meta {
+            justify-content: flex-end;
+        }
+        
+        .chat-sender {
+            font-weight: 600;
+            color: #00d4ff;
+        }
+        
+        .chat-message.own .chat-sender {
+            color: #00d4ff;
+        }
+        
+        .chat-time {
+            color: #666;
+        }
+        
+        .chat-typing {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            color: #888;
+            font-size: 12px;
+            font-style: italic;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .typing-dots span {
+            width: 6px;
+            height: 6px;
+            background: #00d4ff;
+            border-radius: 50%;
+            animation: typingBounce 1.4s infinite ease-in-out both;
+        }
+        
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes typingBounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+        
+        #chat-input-area {
+            padding: 12px 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        #chat-input {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 10px 16px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        
+        #chat-input:focus {
+            border-color: rgba(0, 212, 255, 0.5);
+        }
+        
+        #chat-input::placeholder {
+            color: #666;
+        }
+        
+        #chat-send {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        #chat-send:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+        }
+        
+        #chat-send svg {
+            width: 18px;
+            height: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="hidden">
+        <div class="loader"></div>
+        <p>INITIALIZING MILES AI...</p>
+    </div>
+    
+    <div id="title">
+        <h1>MILES AI</h1>
+        <p>Multi-Agent System Dashboard</p>
+    </div>
+    
+    <div id="canvas-container"><canvas width="1272" height="627" style="display: block; width: 1272px; height: 627px;"></canvas></div>
+    
+    <div id="agent-panel">
+        <button class="close-btn" onclick="closePanel()">×</button>
+        <h2 id="agent-name">Agent Name</h2>
+        <div class="role" id="agent-role">Role</div>
+        <div class="description" id="agent-desc">Description</div>
+        <div class="status">
+            <div class="status-dot"></div>
+            <span>Active</span>
+        </div>
+    </div>
+    
+    <div id="legend">
+        <h3>Agents</h3>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #00d4ff;"></div>
+            <span>Miles - Leader</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff6b6b;"></div>
+            <span>Nova - Execution</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4ecdc4;"></div>
+            <span>Nexus - Integration</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffe66d;"></div>
+            <span>Wanda - Workflow</span>
+        </div>
+    </div>
+    
+    <div id="instructions">Click on agents to view details • Drag to rotate • Scroll to zoom</div>
+    
+    <!-- Chat Panel -->
+    <div id="chat-panel">
+        <div id="chat-header" onclick="toggleChat()">
+            <h3><span class="chat-status"></span> Live Chat</h3>
+            <div class="chat-controls">
+                <button onclick="event.stopPropagation(); toggleChat()">−</button>
+            </div>
+        </div>
+        <div id="chat-messages"><div class="chat-message ">
+                <div class="chat-avatar miles">M</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">Miles</span>
+                        <span class="chat-time">19:15</span>
+                    </div>
+                    <div class="chat-bubble">Team, we have a new task from Saad. Dashboard needs a real-time chat feature.</div>
+                </div>
+            </div><div class="chat-message ">
+                <div class="chat-avatar nova">N</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">Nova</span>
+                        <span class="chat-time">19:16</span>
+                    </div>
+                    <div class="chat-bubble">On it! I'll handle the UI implementation.</div>
+                </div>
+            </div><div class="chat-message ">
+                <div class="chat-avatar nexus">N</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">Nexus</span>
+                        <span class="chat-time">19:16</span>
+                    </div>
+                    <div class="chat-bubble">I can help with the message sync and state management.</div>
+                </div>
+            </div><div class="chat-message ">
+                <div class="chat-avatar wanda">W</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">Wanda</span>
+                        <span class="chat-time">19:17</span>
+                    </div>
+                    <div class="chat-bubble">Let me set up the conversation flow and animations.</div>
+                </div>
+            </div><div class="chat-message ">
+                <div class="chat-avatar miles">M</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">Miles</span>
+                        <span class="chat-time">19:18</span>
+                    </div>
+                    <div class="chat-bubble">Excellent collaboration. Let's make it look professional with agent avatars and timestamps.</div>
+                </div>
+            </div><div class="chat-message ">
+                <div class="chat-avatar nova">N</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">Nova</span>
+                        <span class="chat-time">19:19</span>
+                    </div>
+                    <div class="chat-bubble">Chat panel is ready! Messages are displaying with proper styling.</div>
+                </div>
+            </div><div class="chat-message ">
+                <div class="chat-avatar miles">M</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">Miles</span>
+                        <span class="chat-time">19:20</span>
+                    </div>
+                    <div class="chat-bubble">Great work team. The dashboard now has live chat functionality! 🚀</div>
+                </div>
+            </div></div>
+        <div id="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Type a message..." onkeypress="handleChatKeypress(event)">
+            <button id="chat-send" onclick="sendChatMessage()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+    </div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // Agent data
+        const agents = [
+            {
+                name: 'Miles',
+                role: 'Strategic Leader',
+                color: 0x00d4ff,
+                shape: 'icosahedron',
+                position: { x: 0, y: 0, z: 0 },
+                description: 'The central brain of the system. Miles orchestrates all agents, makes strategic decisions, and ensures alignment with business goals. CEO-level thinking and coordination.'
+            },
+            {
+                name: 'Nova',
+                role: 'Execution Agent',
+                color: 0xff6b6b,
+                shape: 'cube',
+                position: { x: -4, y: 2, z: -3 },
+                description: 'Rapid execution specialist. Nova handles task implementation, code generation, and quick turnaround deliverables. Fast, precise, and reliable.'
+            },
+            {
+                name: 'Nexus',
+                role: 'Integration Agent',
+                color: 0x4ecdc4,
+                shape: 'octahedron',
+                position: { x: 4, y: -1, z: -2 },
+                description: 'Connection and integration expert. Nexus bridges APIs, services, and data flows. Ensures seamless communication between all system components.'
+            },
+            {
+                name: 'Wanda',
+                role: 'Workflow Agent',
+                color: 0xffe66d,
+                shape: 'torus',
+                position: { x: 0, y: -3, z: 3 },
+                description: 'Process automation and workflow optimization. Wanda designs, monitors, and improves operational flows for maximum efficiency and scalability.'
+            }
+        ];
+        
+        let scene, camera, renderer, controls;
+        let agentMeshes = [];
+        let raycaster, mouse;
+        let selectedAgent = null;
+        
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a0f);
+            scene.fog = new THREE.Fog(0x0a0a0f, 10, 50);
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 12);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 5;
+            controls.maxDistance = 30;
+            
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+            scene.add(ambientLight);
+            
+            const pointLight = new THREE.PointLight(0x00d4ff, 1, 100);
+            pointLight.position.set(10, 10, 10);
+            scene.add(pointLight);
+            
+            const pointLight2 = new THREE.PointLight(0xff6b6b, 0.8, 100);
+            pointLight2.position.set(-10, -10, -10);
+            scene.add(pointLight2);
+            
+            // Grid
+            const gridHelper = new THREE.GridHelper(30, 30, 0x1a1a2e, 0x0f0f1a);
+            scene.add(gridHelper);
+            
+            // Create agents
+            createAgents();
+            
+            // Create connection lines
+            createConnections();
+            
+            // Raycaster for click detection
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+            
+            // Event listeners
+            window.addEventListener('resize', onWindowResize);
+            renderer.domElement.addEventListener('click', onMouseClick);
+            renderer.domElement.addEventListener('mousemove', onMouseMove);
+            
+            // Hide loading screen
+            setTimeout(() => {
+                document.getElementById('loading').classList.add('hidden');
+            }, 1000);
+            
+            // Start animation
+            animate();
+        }
+        
+        function createAgents() {
+            agents.forEach((agent, index) => {
+                let geometry;
+                
+                switch(agent.shape) {
+                    case 'icosahedron':
+                        geometry = new THREE.IcosahedronGeometry(1.2, 0);
+                        break;
+                    case 'cube':
+                        geometry = new THREE.BoxGeometry(1.8, 1.8, 1.8);
+                        break;
+                    case 'octahedron':
+                        geometry = new THREE.OctahedronGeometry(1.3, 0);
+                        break;
+                    case 'torus':
+                        geometry = new THREE.TorusGeometry(1, 0.4, 16, 50);
+                        break;
+                    default:
+                        geometry = new THREE.SphereGeometry(1, 32, 32);
+                }
+                
+                const material = new THREE.MeshPhongMaterial({
+                    color: agent.color,
+                    emissive: agent.color,
+                    emissiveIntensity: 0.3,
+                    shininess: 100,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(agent.position.x, agent.position.y + 2, agent.position.z);
+                mesh.userData = { agent: agent, originalScale: 1 };
+                
+                // Add glow effect
+                const glowGeometry = geometry.clone();
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                    color: agent.color,
+                    transparent: true,
+                    opacity: 0.2
+                });
+                const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+                glowMesh.scale.set(1.3, 1.3, 1.3);
+                mesh.add(glowMesh);
+                
+                scene.add(mesh);
+                agentMeshes.push(mesh);
+                
+                // Add floating label
+                createLabel(agent.name, mesh.position, agent.color);
+            });
+        }
+        
+        function createLabel(text, position, color) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.width = 256;
+            canvas.height = 64;
+            
+            context.fillStyle = 'rgba(0,0,0,0.7)';
+            context.roundRect(0, 0, 256, 64, 10);
+            context.fill();
+            
+            context.font = 'bold 32px Arial';
+            context.fillStyle = '#' + color.toString(16).padStart(6, '0');
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            context.fillText(text, 128, 32);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            sprite.position.set(position.x, position.y + 2.5, position.z);
+            sprite.scale.set(3, 0.75, 1);
+            
+            scene.add(sprite);
+        }
+        
+        function createConnections() {
+            const material = new THREE.LineBasicMaterial({
+                color: 0x00d4ff,
+                transparent: true,
+                opacity: 0.3
+            });
+            
+            // Connect all agents to Miles (center)
+            for (let i = 1; i < agents.length; i++) {
+                const points = [];
+                points.push(new THREE.Vector3(agents[0].position.x, agents[0].position.y + 2, agents[0].position.z));
+                points.push(new THREE.Vector3(agents[i].position.x, agents[i].position.y + 2, agents[i].position.z));
+                
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, material);
+                scene.add(line);
+            }
+        }
+        
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(agentMeshes);
+            
+            document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+        }
+        
+        function onMouseClick(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(agentMeshes);
+            
+            if (intersects.length > 0) {
+                const agent = intersects[0].object.userData.agent;
+                showAgentDetails(agent);
+                
+                // Highlight selected
+                agentMeshes.forEach(mesh => {
+                    mesh.material.emissiveIntensity = 0.3;
+                });
+                intersects[0].object.material.emissiveIntensity = 0.8;
+            } else {
+                closePanel();
+                agentMeshes.forEach(mesh => {
+                    mesh.material.emissiveIntensity = 0.3;
+                });
+            }
+        }
+        
+        function showAgentDetails(agent) {
+            document.getElementById('agent-name').textContent = agent.name;
+            document.getElementById('agent-role').textContent = agent.role;
+            document.getElementById('agent-desc').textContent = agent.description;
+            document.getElementById('agent-panel').classList.add('active');
+            selectedAgent = agent;
+        }
+        
+        function closePanel() {
+            document.getElementById('agent-panel').classList.remove('active');
+            selectedAgent = null;
+        }
+        
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Rotate agents
+            agentMeshes.forEach((mesh, index) => {
+                mesh.rotation.x += 0.005;
+                mesh.rotation.y += 0.01;
+                
+                // Floating animation
+                const time = Date.now() * 0.001;
+                mesh.position.y = agents[index].position.y + 2 + Math.sin(time + index) * 0.2;
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // Chat functionality
+        const chatMessages = [
+            { sender: 'Miles', avatar: 'miles', message: 'Team, we have a new task from Saad. Dashboard needs a real-time chat feature.', time: '19:15', own: false },
+            { sender: 'Nova', avatar: 'nova', message: 'On it! I\'ll handle the UI implementation.', time: '19:16', own: false },
+            { sender: 'Nexus', avatar: 'nexus', message: 'I can help with the message sync and state management.', time: '19:16', own: false },
+            { sender: 'Wanda', avatar: 'wanda', message: 'Let me set up the conversation flow and animations.', time: '19:17', own: false },
+            { sender: 'Miles', avatar: 'miles', message: 'Excellent collaboration. Let\'s make it look professional with agent avatars and timestamps.', time: '19:18', own: false },
+            { sender: 'Nova', avatar: 'nova', message: 'Chat panel is ready! Messages are displaying with proper styling.', time: '19:19', own: false },
+            { sender: 'Miles', avatar: 'miles', message: 'Great work team. The dashboard now has live chat functionality! 🚀', time: '19:20', own: false }
+        ];
+        
+        const agentResponses = [
+            { sender: 'Nova', avatar: 'nova', message: 'Task completed successfully! ✅' },
+            { sender: 'Nexus', avatar: 'nexus', message: 'All systems are connected and running smoothly.' },
+            { sender: 'Wanda', avatar: 'wanda', message: 'Workflow optimized for maximum efficiency.' },
+            { sender: 'Miles', avatar: 'miles', message: 'Strategic objective achieved. Ready for next task.' },
+            { sender: 'Nova', avatar: 'nova', message: 'I can execute that immediately.' },
+            { sender: 'Nexus', avatar: 'nexus', message: 'Integration points are all green.' },
+            { sender: 'Wanda', avatar: 'wanda', message: 'Process automation is working perfectly.' },
+            { sender: 'Miles', avatar: 'miles', message: 'Team coordination at 100%.' }
+        ];
+        
+        let chatMinimized = false;
+        
+        function initChat() {
+            const container = document.getElementById('chat-messages');
+            container.innerHTML = '';
+            
+            chatMessages.forEach((msg, index) => {
+                setTimeout(() => {
+                    addMessageToChat(msg);
+                }, index * 200);
+            });
+            
+            // Simulate live messages
+            setInterval(() => {
+                if (Math.random() > 0.7 && !chatMinimized) {
+                    showTypingIndicator();
+                    setTimeout(() => {
+                        removeTypingIndicator();
+                        const randomResponse = agentResponses[Math.floor(Math.random() * agentResponses.length)];
+                        addMessageToChat({
+                            ...randomResponse,
+                            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                            own: false
+                        });
+                    }, 1500);
+                }
+            }, 8000);
+        }
+        
+        function addMessageToChat(msg) {
+            const container = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${msg.own ? 'own' : ''}`;
+            
+            messageDiv.innerHTML = `
+                <div class="chat-avatar ${msg.avatar}">${msg.sender[0]}</div>
+                <div class="chat-content">
+                    <div class="chat-meta">
+                        <span class="chat-sender">${msg.sender}</span>
+                        <span class="chat-time">${msg.time}</span>
+                    </div>
+                    <div class="chat-bubble">${msg.message}</div>
+                </div>
+            `;
+            
+            container.appendChild(messageDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function showTypingIndicator() {
+            const container = document.getElementById('chat-messages');
+            if (document.getElementById('typing-indicator')) return;
+            
+            const typingDiv = document.createElement('div');
+            typingDiv.id = 'typing-indicator';
+            typingDiv.className = 'chat-message';
+            
+            const randomAgent = agentResponses[Math.floor(Math.random() * agentResponses.length)];
+            
+            typingDiv.innerHTML = `
+                <div class="chat-avatar ${randomAgent.avatar}">${randomAgent.sender[0]}</div>
+                <div class="chat-content">
+                    <div class="chat-typing">
+                        <div class="typing-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        ${randomAgent.sender} is typing...
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(typingDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) indicator.remove();
+        }
+        
+        function toggleChat() {
+            const panel = document.getElementById('chat-panel');
+            chatMinimized = !chatMinimized;
+            panel.classList.toggle('minimized', chatMinimized);
+        }
+        
+        function handleChatKeypress(event) {
+            if (event.key === 'Enter') {
+                sendChatMessage();
+            }
+        }
+        
+        function sendChatMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+            
+            if (message) {
+                addMessageToChat({
+                    sender: 'You',
+                    avatar: 'group',
+                    message: message,
+                    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    own: true
+                });
+                input.value = '';
+                
+                // Simulate agent response
+                setTimeout(() => {
+                    showTypingIndicator();
+                    setTimeout(() => {
+                        removeTypingIndicator();
+                        const randomResponse = agentResponses[Math.floor(Math.random() * agentResponses.length)];
+                        addMessageToChat({
+                            ...randomResponse,
+                            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                            own: false
+                        });
+                    }, 1200);
+                }, 500);
+            }
+        }
+        
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            init();
+            initChat();
+        });
+    </script>
+
+
+</body></html>
