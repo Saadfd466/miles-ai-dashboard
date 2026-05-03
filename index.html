@@ -1,7 +1,12 @@
-<html lang="en"><head>
+<!DOCTYPE html>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Miles AI Team Dashboard</title>
+    <title>Miles AI - Agent Swarm Command Center</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -9,26 +14,38 @@
             box-sizing: border-box;
         }
         
+        :root {
+            --miles-color: #00d4ff;
+            --nova-color: #ff4757;
+            --nexus-color: #2ed573;
+            --wanda-color: #ffa502;
+            --pulse-color: #5352ed;
+            --bg-dark: #0a0a0f;
+            --panel-bg: rgba(15, 15, 25, 0.95);
+            --glass-bg: rgba(20, 20, 35, 0.8);
+        }
+        
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #0a0a0f;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
             overflow: hidden;
             color: #fff;
         }
         
+        /* Loading Screen */
         #loading {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: #0a0a0f;
+            background: var(--bg-dark);
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            z-index: 1000;
-            transition: opacity 0.5s ease;
+            z-index: 10000;
+            transition: opacity 0.8s ease;
         }
         
         #loading.hidden {
@@ -36,11 +53,38 @@
             pointer-events: none;
         }
         
-        .loader {
-            width: 60px;
-            height: 60px;
-            border: 4px solid #1a1a2e;
-            border-top: 4px solid #00d4ff;
+        .loader-ring {
+            width: 120px;
+            height: 120px;
+            border: 3px solid transparent;
+            border-top-color: var(--miles-color);
+            border-radius: 50%;
+            animation: spin 1.5s linear infinite;
+            position: relative;
+        }
+        
+        .loader-ring::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            border: 3px solid transparent;
+            border-top-color: var(--nova-color);
+            border-radius: 50%;
+            animation: spin 2s linear infinite reverse;
+        }
+        
+        .loader-ring::after {
+            content: '';
+            position: absolute;
+            top: 25px;
+            left: 25px;
+            right: 25px;
+            bottom: 25px;
+            border: 3px solid transparent;
+            border-top-color: var(--nexus-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -51,231 +95,671 @@
         }
         
         #loading p {
-            margin-top: 20px;
-            color: #00d4ff;
-            font-size: 16px;
-            letter-spacing: 2px;
-        }
-        
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-        }
-        
-        #agent-panel {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            width: 320px;
-            background: rgba(15, 15, 25, 0.95);
-            border: 1px solid rgba(0, 212, 255, 0.3);
-            border-radius: 12px;
-            padding: 24px;
-            z-index: 100;
-            transform: translateX(400px);
-            transition: transform 0.4s ease;
-            backdrop-filter: blur(10px);
-        }
-        
-        #agent-panel.active {
-            transform: translateX(0);
-        }
-        
-        #agent-panel h2 {
-            color: #00d4ff;
-            margin-bottom: 16px;
-            font-size: 24px;
-            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
-            padding-bottom: 10px;
-        }
-        
-        #agent-panel .role {
-            color: #888;
-            font-size: 14px;
+            margin-top: 30px;
+            color: var(--miles-color);
+            font-size: 18px;
+            letter-spacing: 4px;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 12px;
+            animation: pulse-text 2s ease-in-out infinite;
         }
         
-        #agent-panel .description {
-            color: #ccc;
-            line-height: 1.6;
-            font-size: 14px;
-        }
-        
-        #agent-panel .status {
-            margin-top: 16px;
-            padding: 10px 16px;
-            background: rgba(0, 212, 255, 0.1);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        #agent-panel .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #00ff88;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
+        @keyframes pulse-text {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
         
-        #agent-panel .close-btn {
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            background: none;
-            border: none;
-            color: #888;
+        /* Main Layout Grid */
+        #app {
+            display: grid;
+            grid-template-columns: 280px 1fr 320px;
+            grid-template-rows: 60px 1fr 200px 280px;
+            grid-template-areas:
+                "header header header"
+                "timeline canvas metrics"
+                "timeline canvas command"
+                "chat chat chat";
+            height: 100vh;
+            gap: 15px;
+            padding: 15px;
+        }
+        
+        /* Mobile Layout */
+        @media (max-width: 1024px) {
+            #app {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto 1fr auto auto;
+                grid-template-areas:
+                    "header"
+                    "metrics"
+                    "canvas"
+                    "command"
+                    "chat";
+                gap: 10px;
+                padding: 10px;
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            #timeline-panel {
+                display: none;
+            }
+            
+            #header {
+                flex-wrap: wrap;
+                padding: 10px 15px;
+                gap: 10px;
+            }
+            
+            #brand h1 {
+                font-size: 18px;
+            }
+            
+            #brand .tagline {
+                display: none;
+            }
+            
+            #system-status {
+                width: 100%;
+                justify-content: flex-start;
+            }
+            
+            .status-item {
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+            
+            #canvas-container {
+                min-height: 400px;
+                height: 50vh;
+            }
+            
+            #minimap {
+                width: 100px;
+                height: 100px;
+                top: 10px;
+                right: 10px;
+            }
+            
+            #legend-overlay {
+                flex-wrap: wrap;
+                gap: 5px;
+                bottom: 10px;
+                left: 10px;
+            }
+            
+            .legend-chip {
+                padding: 6px 10px;
+                font-size: 11px;
+            }
+            
+            #metrics-panel {
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 10px;
+                padding: 15px;
+            }
+            
+            #metrics-panel h3 {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+            
+            .metric-card {
+                flex: 1;
+                min-width: 120px;
+                padding: 12px;
+            }
+            
+            .metric-chart {
+                height: 40px;
+            }
+            
+            #command-panel {
+                padding: 15px;
+            }
+            
+            .command-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            
+            .command-btn {
+                padding: 10px 8px;
+                font-size: 12px;
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            #chat-panel {
+                height: 300px;
+            }
+            
+            #chat-messages {
+                padding: 15px;
+            }
+            
+            .modal-content {
+                width: 90%;
+                max-width: 400px;
+                margin: 20px;
+            }
+            
+            .modal-icon {
+                width: 70px;
+                height: 70px;
+                font-size: 32px;
+            }
+            
+            .modal-title {
+                font-size: 24px;
+            }
+            
+            .metrics-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 10px;
+            }
+            
+            .metric-box {
+                padding: 15px 10px;
+            }
+            
+            .metric-box-value {
+                font-size: 20px;
+            }
+            
+            .shortcuts-content {
+                width: 90%;
+                max-width: 350px;
+                padding: 20px;
+            }
+            
+            .shortcut-row {
+                padding: 10px 0;
+                font-size: 13px;
+            }
+            
+            .key {
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+        }
+        
+        /* Small Mobile */
+        @media (max-width: 480px) {
+            #app {
+                padding: 8px;
+                gap: 8px;
+            }
+            
+            #header-controls {
+                gap: 8px;
+            }
+            
+            .control-btn {
+                width: 36px;
+                height: 36px;
+                font-size: 16px;
+            }
+            
+            #canvas-container {
+                min-height: 350px;
+            }
+            
+            .legend-chip span {
+                display: none;
+            }
+            
+            .legend-chip {
+                padding: 6px;
+            }
+            
+            .metric-card {
+                min-width: 100px;
+            }
+            
+            .metric-value {
+                font-size: 16px;
+            }
+            
+            .command-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            #chat-panel {
+                height: 250px;
+            }
+        }
+        
+        /* Header */
+        #header {
+            grid-area: header;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 0 24px;
+            backdrop-filter: blur(20px);
+        }
+        
+        #brand {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        #brand h1 {
             font-size: 24px;
-            cursor: pointer;
-            transition: color 0.3s;
+            background: linear-gradient(135deg, var(--miles-color), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 2px;
         }
         
-        #agent-panel .close-btn:hover {
-            color: #fff;
-        }
-        
-        #title {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            z-index: 100;
-        }
-        
-        #title h1 {
-            font-size: 28px;
-            color: #00d4ff;
-            text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
-        }
-        
-        #title p {
-            color: #888;
-            font-size: 14px;
-            margin-top: 4px;
-        }
-        
-        #legend {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(15, 15, 25, 0.9);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            padding: 16px;
-            z-index: 100;
-        }
-        
-        #legend h3 {
-            font-size: 14px;
-            color: #888;
-            margin-bottom: 12px;
+        #brand .tagline {
+            color: #666;
+            font-size: 11px;
             text-transform: uppercase;
+            letter-spacing: 3px;
         }
         
-        .legend-item {
+        #header-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .control-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #888;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            font-size: 18px;
+        }
+        
+        .control-btn:hover {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            transform: translateY(-2px);
+        }
+        
+        .control-btn.active {
+            background: var(--miles-color);
+            color: #000;
+        }
+        
+        #system-status {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse-dot 2s infinite;
+        }
+        
+        .status-dot.active { background: #2ed573; box-shadow: 0 0 10px #2ed573; }
+        .status-dot.busy { background: #ffa502; box-shadow: 0 0 10px #ffa502; }
+        
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
+        }
+        
+        /* Timeline Panel */
+        #timeline-panel {
+            grid-area: timeline;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            overflow-y: auto;
+        }
+        
+        #timeline-panel h3 {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 20px;
             display: flex;
             align-items: center;
             gap: 10px;
-            margin-bottom: 8px;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 20px;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 5px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--miles-color), transparent);
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border-left: 3px solid;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .timeline-item:hover {
+            background: rgba(255,255,255,0.06);
+            transform: translateX(5px);
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -23px;
+            top: 20px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 10px currentColor;
+        }
+        
+        .timeline-item.miles { border-left-color: var(--miles-color); color: var(--miles-color); }
+        .timeline-item.nova { border-left-color: var(--nova-color); color: var(--nova-color); }
+        .timeline-item.nexus { border-left-color: var(--nexus-color); color: var(--nexus-color); }
+        .timeline-item.wanda { border-left-color: var(--wanda-color); color: var(--wanda-color); }
+        .timeline-item.pulse { border-left-color: var(--pulse-color); color: var(--pulse-color); }
+        
+        .timeline-time {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .timeline-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+        
+        .timeline-desc {
+            font-size: 11px;
+            color: #888;
+        }
+        
+        /* Canvas Container */
+        #canvas-container {
+            grid-area: canvas;
+            position: relative;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        
+        #canvas-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+        
+        .overlay-badge {
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 20px;
+            font-size: 12px;
+            color: #888;
+            backdrop-filter: blur(10px);
+        }
+        
+        /* Mini-map */
+        #minimap {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 150px;
+            height: 150px;
+            background: rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: crosshair;
+        }
+        
+        #minimap canvas {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Agent Legend Overlay */
+        #legend-overlay {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            display: flex;
+            gap: 10px;
+            pointer-events: auto;
+        }
+        
+        .legend-chip {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: rgba(0,0,0,0.6);
+            border-radius: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .legend-chip:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+        
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            box-shadow: 0 0 8px currentColor;
+        }
+        
+        .legend-dot.miles { background: var(--miles-color); color: var(--miles-color); }
+        .legend-dot.nova { background: var(--nova-color); color: var(--nova-color); }
+        .legend-dot.nexus { background: var(--nexus-color); color: var(--nexus-color); }
+        .legend-dot.wanda { background: var(--wanda-color); color: var(--wanda-color); }
+        .legend-dot.pulse { background: var(--pulse-color); color: var(--pulse-color); }
+        
+        /* Metrics Panel */
+        #metrics-panel {
+            grid-area: metrics;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        #metrics-panel h3 {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        .metric-card {
+            padding: 15px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border-left: 3px solid var(--miles-color);
+        }
+        
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .metric-name {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--miles-color);
+        }
+        
+        .metric-chart {
+            height: 60px;
+            position: relative;
+        }
+        
+        .sparkline {
+            width: 100%;
+            height: 100%;
+        }
+        
+        /* Command Panel */
+        #command-panel {
+            grid-area: command;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            backdrop-filter: blur(20px);
+        }
+        
+        #command-panel h3 {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+        }
+        
+        .command-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        
+        .command-btn {
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s;
             font-size: 13px;
         }
         
-        .legend-color {
-            width: 16px;
-            height: 16px;
-            border-radius: 4px;
+        .command-btn:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+            border-color: var(--miles-color);
         }
         
-        #instructions {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            color: #666;
-            font-size: 12px;
-            z-index: 100;
+        .command-btn i {
+            font-size: 16px;
         }
         
-        /* Chat Panel Styles */
+        .command-btn.primary {
+            background: linear-gradient(135deg, var(--miles-color), #0099cc);
+            border: none;
+        }
+        
+        .command-btn.primary:hover {
+            box-shadow: 0 5px 20px rgba(0,212,255,0.4);
+        }
+        
+        /* Chat Panel */
         #chat-panel {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            width: 380px;
-            height: 500px;
-            background: rgba(15, 15, 25, 0.98);
-            border: 1px solid rgba(0, 212, 255, 0.3);
+            grid-area: chat;
+            background: var(--glass-bg);
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 16px;
-            z-index: 200;
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 0 0 30px rgba(0, 212, 255, 0.1);
-            transition: transform 0.3s ease, opacity 0.3s ease;
-        }
-        
-        #chat-panel.minimized {
-            transform: translateY(calc(100% - 50px));
-            opacity: 0.9;
+            backdrop-filter: blur(20px);
         }
         
         #chat-header {
-            background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 212, 255, 0.05));
-            padding: 14px 18px;
+            padding: 15px 20px;
+            background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
             display: flex;
             align-items: center;
             justify-content: space-between;
-            border-bottom: 1px solid rgba(0, 212, 255, 0.2);
-            cursor: pointer;
         }
         
         #chat-header h3 {
-            color: #00d4ff;
-            font-size: 15px;
-            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 10px;
+            font-size: 13px;
+            color: #888;
         }
         
-        .chat-status {
+        .live-indicator {
             width: 8px;
             height: 8px;
-            background: #00ff88;
+            background: #2ed573;
             border-radius: 50%;
-            animation: pulse 2s infinite;
-            box-shadow: 0 0 8px #00ff88;
-        }
-        
-        .chat-controls {
-            display: flex;
-            gap: 12px;
-        }
-        
-        .chat-controls button {
-            background: none;
-            border: none;
-            color: #888;
-            cursor: pointer;
-            font-size: 16px;
-            transition: color 0.2s;
-            padding: 4px;
-        }
-        
-        .chat-controls button:hover {
-            color: #fff;
+            animation: pulse-dot 2s infinite;
+            box-shadow: 0 0 10px #2ed573;
         }
         
         #chat-messages {
             flex: 1;
             overflow-y: auto;
-            padding: 16px;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             gap: 12px;
@@ -286,103 +770,72 @@
         }
         
         #chat-messages::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
+            background: transparent;
         }
         
         #chat-messages::-webkit-scrollbar-thumb {
-            background: rgba(0, 212, 255, 0.3);
+            background: rgba(255,255,255,0.1);
             border-radius: 3px;
         }
         
-        .chat-message {
+        .message {
             display: flex;
             gap: 12px;
-            animation: messageSlide 0.3s ease;
+            animation: message-in 0.3s ease;
+            max-width: 80%;
         }
         
-        @keyframes messageSlide {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+        @keyframes message-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         
-        .chat-message.own {
+        .message.own {
             flex-direction: row-reverse;
+            align-self: flex-end;
         }
         
-        .chat-avatar {
+        .message-avatar {
             width: 36px;
             height: 36px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
             font-size: 14px;
+            font-weight: bold;
             flex-shrink: 0;
-            border: 2px solid;
         }
         
-        .chat-avatar.miles {
-            background: linear-gradient(135deg, #00d4ff, #0099cc);
-            border-color: #00d4ff;
-            color: #fff;
+        .message-avatar.miles { background: linear-gradient(135deg, var(--miles-color), #0099cc); }
+        .message-avatar.nova { background: linear-gradient(135deg, var(--nova-color), #cc3333); }
+        .message-avatar.nexus { background: linear-gradient(135deg, var(--nexus-color), #22aa55); }
+        .message-avatar.wanda { background: linear-gradient(135deg, var(--wanda-color), #cc8800); }
+        .message-avatar.pulse { background: linear-gradient(135deg, var(--pulse-color), #3333cc); }
+        .message-avatar.user { background: linear-gradient(135deg, #888, #555); }
+        
+        .message-content {
+            max-width: calc(100% - 50px);
         }
         
-        .chat-avatar.nova {
-            background: linear-gradient(135deg, #ff6b6b, #cc4444);
-            border-color: #ff6b6b;
-            color: #fff;
-        }
-        
-        .chat-avatar.nexus {
-            background: linear-gradient(135deg, #4ecdc4, #3aa89f);
-            border-color: #4ecdc4;
-            color: #fff;
-        }
-        
-        .chat-avatar.wanda {
-            background: linear-gradient(135deg, #ffe66d, #d4b84a);
-            border-color: #ffe66d;
-            color: #333;
-        }
-        
-        .chat-avatar.group {
-            background: linear-gradient(135deg, #a855f7, #7c3aed);
-            border-color: #a855f7;
-            color: #fff;
-        }
-        
-        .chat-content {
-            max-width: 75%;
-        }
-        
-        .chat-bubble {
+        .message-bubble {
             padding: 10px 14px;
             border-radius: 14px;
             font-size: 13px;
             line-height: 1.5;
-            word-wrap: break-word;
         }
         
-        .chat-message:not(.own) .chat-bubble {
-            background: rgba(255, 255, 255, 0.08);
-            color: #e0e0e0;
+        .message:not(.own) .message-bubble {
+            background: rgba(255,255,255,0.08);
             border-bottom-left-radius: 4px;
         }
         
-        .chat-message.own .chat-bubble {
-            background: linear-gradient(135deg, rgba(0, 212, 255, 0.3), rgba(0, 212, 255, 0.15));
-            color: #fff;
+        .message.own .message-bubble {
+            background: linear-gradient(135deg, rgba(0,212,255,0.3), rgba(0,212,255,0.1));
             border-bottom-right-radius: 4px;
         }
         
-        .chat-meta {
+        .message-meta {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -390,28 +843,15 @@
             font-size: 11px;
         }
         
-        .chat-message:not(.own) .chat-meta {
-            justify-content: flex-start;
-        }
-        
-        .chat-message.own .chat-meta {
-            justify-content: flex-end;
-        }
-        
-        .chat-sender {
+        .message-sender {
             font-weight: 600;
-            color: #00d4ff;
         }
         
-        .chat-message.own .chat-sender {
-            color: #00d4ff;
-        }
-        
-        .chat-time {
+        .message-time {
             color: #666;
         }
         
-        .chat-typing {
+        .typing-indicator {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -429,41 +869,42 @@
         .typing-dots span {
             width: 6px;
             height: 6px;
-            background: #00d4ff;
+            background: var(--miles-color);
             border-radius: 50%;
-            animation: typingBounce 1.4s infinite ease-in-out both;
+            animation: typing-bounce 1.4s infinite ease-in-out both;
         }
         
         .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
         .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
         
-        @keyframes typingBounce {
+        @keyframes typing-bounce {
             0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
             40% { transform: scale(1); opacity: 1; }
         }
         
         #chat-input-area {
-            padding: 12px 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 15px 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: center;
         }
         
         #chat-input {
             flex: 1;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 20px;
-            padding: 10px 16px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            padding: 12px 20px;
             color: #fff;
-            font-size: 13px;
+            font-size: 14px;
             outline: none;
-            transition: border-color 0.2s;
+            transition: all 0.3s;
         }
         
         #chat-input:focus {
-            border-color: rgba(0, 212, 255, 0.5);
+            border-color: var(--miles-color);
+            background: rgba(255,255,255,0.08);
         }
         
         #chat-input::placeholder {
@@ -471,498 +912,1286 @@
         }
         
         #chat-send {
-            width: 36px;
-            height: 36px;
+            width: 44px;
+            height: 44px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #00d4ff, #0099cc);
+            background: linear-gradient(135deg, var(--miles-color), #0099cc);
             border: none;
             color: #fff;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s;
         }
         
         #chat-send:hover {
             transform: scale(1.05);
-            box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
+            box-shadow: 0 0 20px rgba(0,212,255,0.4);
         }
         
-        #chat-send svg {
-            width: 18px;
-            height: 18px;
+        /* Agent Detail Modal */
+        #agent-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 5000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        #agent-modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .modal-content {
+            width: 500px;
+            background: var(--panel-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 24px;
+            padding: 0;
+            transform: scale(0.9);
+            transition: transform 0.3s;
+            overflow: hidden;
+        }
+        
+        #agent-modal.active .modal-content {
+            transform: scale(1);
+        }
+        
+        .modal-header {
+            padding: 30px;
+            position: relative;
+            text-align: center;
+        }
+        
+        .modal-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--agent-color), transparent);
+        }
+        
+        .modal-icon {
+            width: 100px;
+            height: 100px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 48px;
+            font-weight: bold;
+            margin: 0 auto 20px;
+            position: relative;
+            background: linear-gradient(135deg, var(--agent-color), transparent);
+        }
+        
+        .modal-icon::after {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            border-radius: 27px;
+            padding: 3px;
+            background: linear-gradient(135deg, var(--agent-color), transparent);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+        
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 28px;
+            cursor: pointer;
+            transition: color 0.3s;
+        }
+        
+        .modal-close:hover { color: #fff; }
+        
+        .modal-title {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+        
+        .modal-role {
+            color: #888;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+        
+        .modal-body {
+            padding: 0 30px 30px;
+        }
+        
+        .modal-section {
+            margin-bottom: 25px;
+        }
+        
+        .modal-section h4 {
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+        
+        .modal-section p {
+            color: #ccc;
+            line-height: 1.7;
+            font-size: 14px;
+        }
+        
+        .capabilities-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .capability-tag {
+            padding: 8px 16px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            font-size: 12px;
+            color: #aaa;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        
+        .metric-box {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .metric-box-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--agent-color);
+            margin-bottom: 5px;
+        }
+        
+        .metric-box-label {
+            font-size: 11px;
+            color: #666;
+        }
+        
+        /* Toast Notifications */
+        #toast-container {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 6000;
+        }
+        
+        .toast {
+            padding: 16px 24px;
+            background: var(--panel-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toast-in 0.3s ease;
+            backdrop-filter: blur(20px);
+            min-width: 300px;
+        }
+        
+        @keyframes toast-in {
+            from { opacity: 0; transform: translateX(100%); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .toast-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        .toast.success .toast-icon { background: rgba(46,213,115,0.2); color: #2ed573; }
+        .toast.info .toast-icon { background: rgba(0,212,255,0.2); color: #00d4ff; }
+        .toast.warning .toast-icon { background: rgba(255,165,2,0.2); color: #ffa502; }
+        
+        .toast-content {
+            flex: 1;
+        }
+        
+        .toast-title {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .toast-message {
+            font-size: 12px;
+            color: #888;
+        }
+        
+        /* Keyboard Shortcuts Modal */
+        #shortcuts-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 7000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        #shortcuts-modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        .shortcuts-content {
+            width: 500px;
+            background: var(--panel-bg);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 30px;
+        }
+        
+        .shortcuts-content h2 {
+            margin-bottom: 20px;
+            color: var(--miles-color);
+        }
+        
+        .shortcut-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .shortcut-row:last-child {
+            border-bottom: none;
+        }
+        
+        .shortcut-keys {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .key {
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        /* Touch Controls for Mobile */
+        .touch-controls {
+            display: none;
+        }
+        
+        @media (max-width: 1024px) {
+            .touch-controls {
+                display: flex;
+                position: absolute;
+                bottom: 80px;
+                right: 10px;
+                flex-direction: column;
+                gap: 10px;
+                z-index: 100;
+            }
+            
+            .touch-btn {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: rgba(0, 212, 255, 0.9);
+                border: none;
+                color: #000;
+                font-size: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 15px rgba(0, 212, 255, 0.4);
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            
+            .touch-btn:active {
+                transform: scale(0.95);
+            }
+            
+            .touch-btn.secondary {
+                background: rgba(255, 255, 255, 0.9);
+            }
         }
     </style>
 </head>
 <body>
-    <div id="loading" class="hidden">
-        <div class="loader"></div>
-        <p>INITIALIZING MILES AI...</p>
+    <!-- Loading Screen -->
+    <div id="loading">
+        <div class="loader-ring"></div>
+        <p>Initializing Agent Swarm...</p>
     </div>
     
-    <div id="title">
-        <h1>MILES AI</h1>
-        <p>Multi-Agent System Dashboard</p>
-    </div>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
     
-    <div id="canvas-container"><canvas width="1272" height="627" style="display: block; width: 1272px; height: 627px;"></canvas></div>
-    
-    <div id="agent-panel">
-        <button class="close-btn" onclick="closePanel()">×</button>
-        <h2 id="agent-name">Agent Name</h2>
-        <div class="role" id="agent-role">Role</div>
-        <div class="description" id="agent-desc">Description</div>
-        <div class="status">
-            <div class="status-dot"></div>
-            <span>Active</span>
-        </div>
-    </div>
-    
-    <div id="legend">
-        <h3>Agents</h3>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #00d4ff;"></div>
-            <span>Miles - Leader</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #ff6b6b;"></div>
-            <span>Nova - Execution</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #4ecdc4;"></div>
-            <span>Nexus - Integration</span>
-        </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #ffe66d;"></div>
-            <span>Wanda - Workflow</span>
-        </div>
-    </div>
-    
-    <div id="instructions">Click on agents to view details • Drag to rotate • Scroll to zoom</div>
-    
-    <!-- Chat Panel -->
-    <div id="chat-panel">
-        <div id="chat-header" onclick="toggleChat()">
-            <h3><span class="chat-status"></span> Live Chat</h3>
-            <div class="chat-controls">
-                <button onclick="event.stopPropagation(); toggleChat()">−</button>
+    <!-- Agent Modal -->
+    <div id="agent-modal" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header" id="modal-header">
+                <button class="modal-close" onclick="closeModal()">×</button>
+                <div class="modal-icon" id="modal-icon">M</div>
+                <h2 class="modal-title" id="modal-title">Miles</h2>
+                <div class="modal-role" id="modal-role">Strategic Leader</div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-section">
+                    <h4>Description</h4>
+                    <p id="modal-desc">The central orchestrator of the agent swarm.</p>
+                </div>
+                <div class="modal-section">
+                    <h4>Capabilities</h4>
+                    <div class="capabilities-grid" id="modal-caps"></div>
+                </div>
+                <div class="modal-section">
+                    <h4>Performance Metrics</h4>
+                    <div class="metrics-grid">
+                        <div class="metric-box">
+                            <div class="metric-box-value" id="modal-tasks">47</div>
+                            <div class="metric-box-label">Tasks</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-box-value" id="modal-success">98%</div>
+                            <div class="metric-box-label">Success</div>
+                        </div>
+                        <div class="metric-box">
+                            <div class="metric-box-value" id="modal-avg">2.3s</div>
+                            <div class="metric-box-label">Avg Time</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-        <div id="chat-messages"><div class="chat-message ">
-                <div class="chat-avatar miles">M</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">Miles</span>
-                        <span class="chat-time">19:15</span>
-                    </div>
-                    <div class="chat-bubble">Team, we have a new task from Saad. Dashboard needs a real-time chat feature.</div>
-                </div>
-            </div><div class="chat-message ">
-                <div class="chat-avatar nova">N</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">Nova</span>
-                        <span class="chat-time">19:16</span>
-                    </div>
-                    <div class="chat-bubble">On it! I'll handle the UI implementation.</div>
-                </div>
-            </div><div class="chat-message ">
-                <div class="chat-avatar nexus">N</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">Nexus</span>
-                        <span class="chat-time">19:16</span>
-                    </div>
-                    <div class="chat-bubble">I can help with the message sync and state management.</div>
-                </div>
-            </div><div class="chat-message ">
-                <div class="chat-avatar wanda">W</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">Wanda</span>
-                        <span class="chat-time">19:17</span>
-                    </div>
-                    <div class="chat-bubble">Let me set up the conversation flow and animations.</div>
-                </div>
-            </div><div class="chat-message ">
-                <div class="chat-avatar miles">M</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">Miles</span>
-                        <span class="chat-time">19:18</span>
-                    </div>
-                    <div class="chat-bubble">Excellent collaboration. Let's make it look professional with agent avatars and timestamps.</div>
-                </div>
-            </div><div class="chat-message ">
-                <div class="chat-avatar nova">N</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">Nova</span>
-                        <span class="chat-time">19:19</span>
-                    </div>
-                    <div class="chat-bubble">Chat panel is ready! Messages are displaying with proper styling.</div>
-                </div>
-            </div><div class="chat-message ">
-                <div class="chat-avatar miles">M</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">Miles</span>
-                        <span class="chat-time">19:20</span>
-                    </div>
-                    <div class="chat-bubble">Great work team. The dashboard now has live chat functionality! 🚀</div>
-                </div>
-            </div></div>
-        <div id="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Type a message..." onkeypress="handleChatKeypress(event)">
-            <button id="chat-send" onclick="sendChatMessage()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-            </button>
+    </div>
+    
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="shortcuts-modal" onclick="closeShortcuts(event)">
+        <div class="shortcuts-content" onclick="event.stopPropagation()">
+            <h2>⌨️ Keyboard Shortcuts</h2>
+            <div class="shortcut-row">
+                <span>Focus Miles</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">1</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Focus Nova</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">2</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Focus Nexus</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">3</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Focus Wanda</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">4</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Focus Pulse</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">5</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Deploy All</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">D</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Health Check</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">H</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Show Shortcuts</span>
+                <div class="shortcut-keys"><span class="key">Cmd</span><span class="key">/</span></div>
+            </div>
+            <div class="shortcut-row">
+                <span>Close Modal</span>
+                <div class="shortcut-keys"><span class="key">Esc</span></div>
+            </div>
         </div>
     </div>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    
+    <!-- Main App -->
+    <div id="app">
+        <!-- Header -->
+        <div id="header">
+            <div id="brand">
+                <div>
+                    <h1>MILES AI</h1>
+                    <div class="tagline">Agent Swarm Command Center</div>
+                </div>
+            </div>
+            <div id="header-controls">
+                <button class="control-btn" onclick="toggleShortcuts()" title="Keyboard Shortcuts">⌨️</button>
+                <button class="control-btn primary" onclick="emergencyStop()" title="Emergency Stop">⚡</button>
+            </div>
+            <div id="system-status">
+                <div class="status-item">
+                    <div class="status-dot active"></div>
+                    <span>5 Agents Online</span>
+                </div>
+                <div class="status-item">
+                    <div class="status-dot busy"></div>
+                    <span>12 Active Tasks</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Timeline Panel -->
+        <div id="timeline-panel">
+            <h3>⏱️ Activity Timeline</h3>
+            <div class="timeline" id="timeline">
+                <!-- Timeline items will be added dynamically -->
+            </div>
+        </div>
+        
+        <!-- 3D Canvas -->
+        <div id="canvas-container">
+            <div id="canvas-overlay">
+                <div class="overlay-badge">🎯 Click agents for details</div>
+                <div class="overlay-badge">🖱️ Drag to rotate • Scroll to zoom</div>
+            </div>
+            
+            <!-- Mini-map -->
+            <div id="minimap">
+                <canvas id="minimap-canvas"></canvas>
+            </div>
+            
+            <div id="legend-overlay">
+                <div class="legend-chip" onclick="focusAgent('miles')">
+                    <div class="legend-dot miles"></div>
+                    <span>Miles</span>
+                </div>
+                <div class="legend-chip" onclick="focusAgent('nova')">
+                    <div class="legend-dot nova"></div>
+                    <span>Nova</span>
+                </div>
+                <div class="legend-chip" onclick="focusAgent('nexus')">
+                    <div class="legend-dot nexus"></div>
+                    <span>Nexus</span>
+                </div>
+                <div class="legend-chip" onclick="focusAgent('wanda')">
+                    <div class="legend-dot wanda"></div>
+                    <span>Wanda</span>
+                </div>
+                <div class="legend-chip" onclick="focusAgent('pulse')">
+                    <div class="legend-dot pulse"></div>
+                    <span>Pulse</span>
+                </div>
+            </div>
+            
+            <!-- Touch Controls for Mobile -->
+            <div class="touch-controls">
+                <button class="touch-btn" onclick="resetCamera()" title="Reset View">🏠</button>
+                <button class="touch-btn secondary" onclick="toggleAutoRotate()" title="Auto Rotate">🔄</button>
+            </div>
+        </div>
+        
+        <!-- Metrics Panel -->
+        <div id="metrics-panel">
+            <h3>📊 Live Metrics</h3>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-name">CPU Usage</span>
+                    <span class="metric-value" id="cpu-value">42%</span>
+                </div>
+                <div class="metric-chart">
+                    <canvas id="cpu-chart" class="sparkline"></canvas>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-name">Memory</span>
+                    <span class="metric-value" id="mem-value">68%</span>
+                </div>
+                <div class="metric-chart">
+                    <canvas id="mem-chart" class="sparkline"></canvas>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <div class="metric-header">
+                    <span class="metric-name">Task Rate</span>
+                    <span class="metric-value" id="task-value">24/s</span>
+                </div>
+                <div class="metric-chart">
+                    <canvas id="task-chart" class="sparkline"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Command Panel -->
+        <div id="command-panel">
+            <h3>🎮 Command Center</h3>
+            <div class="command-grid">
+                <button class="command-btn primary" onclick="deployAll()">
+                    <span>🚀</span> Deploy All
+                </button>
+                <button class="command-btn" onclick="healthCheck()">
+                    <span>🏥</span> Health Check
+                </button>
+                <button class="command-btn" onclick="syncAgents()">
+                    <span>🔄</span> Sync Agents
+                </button>
+                <button class="command-btn" onclick="clearCache()">
+                    <span>🧹</span> Clear Cache
+                </button>
+                <button class="command-btn" onclick="backupSystem()">
+                    <span>💾</span> Backup
+                </button>
+                <button class="command-btn" onclick="viewLogs()">
+                    <span>📋</span> View Logs
+                </button>
+            </div>
+        </div>
+        
+        <!-- Chat Panel -->
+        <div id="chat-panel">
+            <div id="chat-header">
+                <h3><span class="live-indicator"></span> Live Agent Communication</h3>
+                <span style="color: #666; font-size: 12px;">5 agents active</span>
+            </div>
+            <div id="chat-messages"></div>
+            <div id="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Send command to agent swarm...">
+                <button id="chat-send" onclick="sendMessage()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Agent data
-        const agents = [
-            {
+        // Agent Data
+        const agents = {
+            miles: {
                 name: 'Miles',
                 role: 'Strategic Leader',
                 color: 0x00d4ff,
-                shape: 'icosahedron',
+                cssColor: '#00d4ff',
+                description: 'The central orchestrator of the agent swarm. Miles handles high-level strategy, task delegation, and cross-agent coordination.',
+                capabilities: ['Strategy', 'Planning', 'Coordination', 'Decision Making'],
+                metrics: { tasks: 47, success: '98%', avg: '2.3s' },
                 position: { x: 0, y: 0, z: 0 },
-                description: 'The central brain of the system. Miles orchestrates all agents, makes strategic decisions, and ensures alignment with business goals. CEO-level thinking and coordination.'
+                geometry: 'icosahedron'
             },
-            {
+            nova: {
                 name: 'Nova',
-                role: 'Execution Agent',
-                color: 0xff6b6b,
-                shape: 'cube',
-                position: { x: -4, y: 2, z: -3 },
-                description: 'Rapid execution specialist. Nova handles task implementation, code generation, and quick turnaround deliverables. Fast, precise, and reliable.'
+                role: 'Execution Engine',
+                color: 0xff4757,
+                cssColor: '#ff4757',
+                description: 'The action-oriented executor. Nova transforms plans into reality through code generation, deployment, and rapid iteration.',
+                capabilities: ['Code Gen', 'Deployment', 'Testing', 'Optimization'],
+                metrics: { tasks: 156, success: '96%', avg: '1.8s' },
+                position: { x: 8, y: 3, z: 5 },
+                geometry: 'cube'
             },
-            {
+            nexus: {
                 name: 'Nexus',
-                role: 'Integration Agent',
-                color: 0x4ecdc4,
-                shape: 'octahedron',
-                position: { x: 4, y: -1, z: -2 },
-                description: 'Connection and integration expert. Nexus bridges APIs, services, and data flows. Ensures seamless communication between all system components.'
+                role: 'Integration Hub',
+                color: 0x2ed573,
+                cssColor: '#2ed573',
+                description: 'The connector of systems. Nexus manages APIs, databases, external services, and ensures seamless data flow.',
+                capabilities: ['APIs', 'Databases', 'Security', 'Data Flow'],
+                metrics: { tasks: 89, success: '99%', avg: '3.1s' },
+                position: { x: -8, y: -2, z: 5 },
+                geometry: 'octahedron'
             },
-            {
+            wanda: {
                 name: 'Wanda',
-                role: 'Workflow Agent',
-                color: 0xffe66d,
-                shape: 'torus',
-                position: { x: 0, y: -3, z: 3 },
-                description: 'Process automation and workflow optimization. Wanda designs, monitors, and improves operational flows for maximum efficiency and scalability.'
+                role: 'Workflow Master',
+                color: 0xffa502,
+                cssColor: '#ffa502',
+                description: 'The process optimizer. Wanda designs, schedules, and monitors workflows to ensure efficient task execution.',
+                capabilities: ['Scheduling', 'Monitoring', 'Automation', 'Reporting'],
+                metrics: { tasks: 124, success: '97%', avg: '2.1s' },
+                position: { x: 5, y: -4, z: -5 },
+                geometry: 'torus'
+            },
+            pulse: {
+                name: 'Pulse',
+                role: 'System Monitor',
+                color: 0x5352ed,
+                cssColor: '#5352ed',
+                description: 'The vigilant observer. Pulse tracks system health, performance metrics, and alerts on anomalies in real-time.',
+                capabilities: ['Monitoring', 'Alerts', 'Analytics', 'Health Checks'],
+                metrics: { tasks: 203, success: '100%', avg: '0.5s' },
+                position: { x: -5, y: 4, z: -5 },
+                geometry: 'sphere'
             }
-        ];
+        };
+
+        // Three.js Setup
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0a0f, 0.015);
         
-        let scene, camera, renderer, controls;
-        let agentMeshes = [];
-        let raycaster, mouse;
-        let selectedAgent = null;
+        const camera = new THREE.PerspectiveCamera(75, 
+            document.getElementById('canvas-container').clientWidth / 
+            document.getElementById('canvas-container').clientHeight, 0.1, 1000);
+        camera.position.set(0, 5, 18);
         
-        function init() {
-            // Scene setup
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a0f);
-            scene.fog = new THREE.Fog(0x0a0a0f, 10, 50);
-            
-            // Camera
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 5, 12);
-            
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
-            
-            // Controls
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.05;
-            controls.minDistance = 5;
-            controls.maxDistance = 30;
-            
-            // Lighting
-            const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
-            scene.add(ambientLight);
-            
-            const pointLight = new THREE.PointLight(0x00d4ff, 1, 100);
-            pointLight.position.set(10, 10, 10);
-            scene.add(pointLight);
-            
-            const pointLight2 = new THREE.PointLight(0xff6b6b, 0.8, 100);
-            pointLight2.position.set(-10, -10, -10);
-            scene.add(pointLight2);
-            
-            // Grid
-            const gridHelper = new THREE.GridHelper(30, 30, 0x1a1a2e, 0x0f0f1a);
-            scene.add(gridHelper);
-            
-            // Create agents
-            createAgents();
-            
-            // Create connection lines
-            createConnections();
-            
-            // Raycaster for click detection
-            raycaster = new THREE.Raycaster();
-            mouse = new THREE.Vector2();
-            
-            // Event listeners
-            window.addEventListener('resize', onWindowResize);
-            renderer.domElement.addEventListener('click', onMouseClick);
-            renderer.domElement.addEventListener('mousemove', onMouseMove);
-            
-            // Hide loading screen
-            setTimeout(() => {
-                document.getElementById('loading').classList.add('hidden');
-            }, 1000);
-            
-            // Start animation
-            animate();
-        }
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(
+            document.getElementById('canvas-container').clientWidth,
+            document.getElementById('canvas-container').clientHeight
+        );
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
         
-        function createAgents() {
-            agents.forEach((agent, index) => {
-                let geometry;
-                
-                switch(agent.shape) {
-                    case 'icosahedron':
-                        geometry = new THREE.IcosahedronGeometry(1.2, 0);
-                        break;
-                    case 'cube':
-                        geometry = new THREE.BoxGeometry(1.8, 1.8, 1.8);
-                        break;
-                    case 'octahedron':
-                        geometry = new THREE.OctahedronGeometry(1.3, 0);
-                        break;
-                    case 'torus':
-                        geometry = new THREE.TorusGeometry(1, 0.4, 16, 50);
-                        break;
-                    default:
-                        geometry = new THREE.SphereGeometry(1, 32, 32);
-                }
-                
-                const material = new THREE.MeshPhongMaterial({
-                    color: agent.color,
-                    emissive: agent.color,
-                    emissiveIntensity: 0.3,
-                    shininess: 100,
-                    transparent: true,
-                    opacity: 0.9
-                });
-                
-                const mesh = new THREE.Mesh(geometry, material);
-                mesh.position.set(agent.position.x, agent.position.y + 2, agent.position.z);
-                mesh.userData = { agent: agent, originalScale: 1 };
-                
-                // Add glow effect
-                const glowGeometry = geometry.clone();
-                const glowMaterial = new THREE.MeshBasicMaterial({
-                    color: agent.color,
-                    transparent: true,
-                    opacity: 0.2
-                });
-                const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
-                glowMesh.scale.set(1.3, 1.3, 1.3);
-                mesh.add(glowMesh);
-                
-                scene.add(mesh);
-                agentMeshes.push(mesh);
-                
-                // Add floating label
-                createLabel(agent.name, mesh.position, agent.color);
-            });
-        }
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 10;
+        controls.maxDistance = 30;
         
-        function createLabel(text, position, color) {
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = 256;
-            canvas.height = 64;
-            
-            context.fillStyle = 'rgba(0,0,0,0.7)';
-            context.roundRect(0, 0, 256, 64, 10);
-            context.fill();
-            
-            context.font = 'bold 32px Arial';
-            context.fillStyle = '#' + color.toString(16).padStart(6, '0');
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.fillText(text, 128, 32);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-            const sprite = new THREE.Sprite(spriteMaterial);
-            sprite.position.set(position.x, position.y + 2.5, position.z);
-            sprite.scale.set(3, 0.75, 1);
-            
-            scene.add(sprite);
-        }
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambientLight);
         
-        function createConnections() {
-            const material = new THREE.LineBasicMaterial({
-                color: 0x00d4ff,
+        const pointLight = new THREE.PointLight(0x00d4ff, 1, 100);
+        pointLight.position.set(0, 10, 10);
+        scene.add(pointLight);
+        
+        // Agent Objects
+        const agentMeshes = {};
+        const agentGlows = {};
+        const connectionLines = [];
+        const dataPackets = [];
+        const activeCollaborations = new Map();
+        
+        // Create Agent Mesh
+        function createAgentMesh(agentKey, agent) {
+            let geometry;
+            switch(agent.geometry) {
+                case 'icosahedron':
+                    geometry = new THREE.IcosahedronGeometry(1.2, 0);
+                    break;
+                case 'cube':
+                    geometry = new THREE.BoxGeometry(1.8, 1.8, 1.8);
+                    break;
+                case 'octahedron':
+                    geometry = new THREE.OctahedronGeometry(1.4, 0);
+                    break;
+                case 'torus':
+                    geometry = new THREE.TorusGeometry(1, 0.4, 16, 100);
+                    break;
+                case 'sphere':
+                    geometry = new THREE.SphereGeometry(1.2, 32, 32);
+                    break;
+                default:
+                    geometry = new THREE.IcosahedronGeometry(1.2, 0);
+            }
+            
+            const material = new THREE.MeshPhongMaterial({
+                color: agent.color,
+                emissive: agent.color,
+                emissiveIntensity: 0.3,
+                shininess: 100,
                 transparent: true,
-                opacity: 0.3
+                opacity: 0.9
             });
             
-            // Connect all agents to Miles (center)
-            for (let i = 1; i < agents.length; i++) {
-                const points = [];
-                points.push(new THREE.Vector3(agents[0].position.x, agents[0].position.y + 2, agents[0].position.z));
-                points.push(new THREE.Vector3(agents[i].position.x, agents[i].position.y + 2, agents[i].position.z));
-                
-                const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                const line = new THREE.Line(geometry, material);
-                scene.add(line);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(agent.position.x, agent.position.y, agent.position.z);
+            mesh.userData = { agentKey, agent };
+            
+            // Glow effect
+            const glowGeometry = new THREE.SphereGeometry(2, 32, 32);
+            const glowMaterial = new THREE.MeshBasicMaterial({
+                color: agent.color,
+                transparent: true,
+                opacity: 0.1
+            });
+            const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+            glow.position.copy(mesh.position);
+            
+            // Particle ring
+            const ringGeometry = new THREE.RingGeometry(2.5, 2.7, 64);
+            const ringMaterial = new THREE.MeshBasicMaterial({
+                color: agent.color,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
+            const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+            ring.position.copy(mesh.position);
+            ring.rotation.x = Math.PI / 2;
+            
+            scene.add(mesh);
+            scene.add(glow);
+            scene.add(ring);
+            
+            agentMeshes[agentKey] = mesh;
+            agentGlows[agentKey] = { glow, ring };
+            
+            return mesh;
+        }
+        
+        // Create all agents
+        Object.keys(agents).forEach(key => createAgentMesh(key, agents[key]));
+        
+        // Create connection lines with collaboration status
+        function createConnections() {
+            const agentKeys = Object.keys(agents);
+            
+            for (let i = 0; i < agentKeys.length; i++) {
+                for (let j = i + 1; j < agentKeys.length; j++) {
+                    const start = agentMeshes[agentKeys[i]].position;
+                    const end = agentMeshes[agentKeys[j]].position;
+                    
+                    // Create curve for collaboration line
+                    const curve = new THREE.LineCurve3(start.clone(), end.clone());
+                    const points = curve.getPoints(50);
+                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                    
+                    const material = new THREE.LineBasicMaterial({
+                        color: 0x333333,
+                        transparent: true,
+                        opacity: 0.2
+                    });
+                    
+                    const line = new THREE.Line(geometry, material);
+                    scene.add(line);
+                    
+                    connectionLines.push({
+                        line,
+                        start: agentKeys[i],
+                        end: agentKeys[j],
+                        curve,
+                        collaborationMesh: null
+                    });
+                }
             }
         }
+        createConnections();
         
-        function onMouseMove(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+        // Create collaboration visualization
+        function createCollaboration(from, to, status = 'active') {
+            const key = [from, to].sort().join('-');
             
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(agentMeshes);
-            
-            document.body.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
-        }
-        
-        function onMouseClick(event) {
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-            
-            raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(agentMeshes);
-            
-            if (intersects.length > 0) {
-                const agent = intersects[0].object.userData.agent;
-                showAgentDetails(agent);
-                
-                // Highlight selected
-                agentMeshes.forEach(mesh => {
-                    mesh.material.emissiveIntensity = 0.3;
-                });
-                intersects[0].object.material.emissiveIntensity = 0.8;
-            } else {
-                closePanel();
-                agentMeshes.forEach(mesh => {
-                    mesh.material.emissiveIntensity = 0.3;
-                });
+            if (activeCollaborations.has(key)) {
+                return;
             }
+            
+            const colors = {
+                success: 0x2ed573,
+                active: 0xffa502,
+                error: 0xff4757
+            };
+            
+            const start = agentMeshes[from].position;
+            const end = agentMeshes[to].position;
+            
+            // Create glowing line
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(100 * 3);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const material = new THREE.LineBasicMaterial({
+                color: colors[status],
+                transparent: true,
+                opacity: 0.8,
+                linewidth: 3
+            });
+            
+            const collabLine = new THREE.Line(geometry, material);
+            scene.add(collabLine);
+            
+            activeCollaborations.set(key, {
+                line: collabLine,
+                from,
+                to,
+                status,
+                progress: 0
+            });
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                if (activeCollaborations.has(key)) {
+                    scene.remove(activeCollaborations.get(key).line);
+                    activeCollaborations.delete(key);
+                }
+            }, 3000);
         }
         
-        function showAgentDetails(agent) {
-            document.getElementById('agent-name').textContent = agent.name;
-            document.getElementById('agent-role').textContent = agent.role;
-            document.getElementById('agent-desc').textContent = agent.description;
-            document.getElementById('agent-panel').classList.add('active');
-            selectedAgent = agent;
+        // Create data packet
+        function createDataPacket(from, to) {
+            const geometry = new THREE.SphereGeometry(0.15, 16, 16);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                emissive: 0x00d4ff,
+                emissiveIntensity: 0.8
+            });
+            const packet = new THREE.Mesh(geometry, material);
+            
+            const startPos = agentMeshes[from].position.clone();
+            const endPos = agentMeshes[to].position.clone();
+            
+            packet.position.copy(startPos);
+            packet.userData = { from, to, progress: 0, speed: 0.02 + Math.random() * 0.02 };
+            
+            scene.add(packet);
+            dataPackets.push(packet);
+            
+            // Create collaboration effect
+            createCollaboration(from, to, 'active');
         }
         
-        function closePanel() {
-            document.getElementById('agent-panel').classList.remove('active');
-            selectedAgent = null;
+        // Particle system
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 1500;
+        const posArray = new Float32Array(particlesCount * 3);
+        
+        for (let i = 0; i < particlesCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 40;
         }
         
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.05,
+            color: 0x00d4ff,
+            transparent: true,
+            opacity: 0.5
+        });
+        
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+        
+        // Mini-map setup
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const minimapCtx = minimapCanvas.getContext('2d');
+        minimapCanvas.width = 150;
+        minimapCanvas.height = 150;
+        
+        function updateMinimap() {
+            minimapCtx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            minimapCtx.fillRect(0, 0, 150, 150);
+            
+            const scale = 3;
+            const offsetX = 75;
+            const offsetY = 75;
+            
+            // Draw connections
+            minimapCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            minimapCtx.lineWidth = 1;
+            
+            Object.keys(agents).forEach((key1, i) => {
+                Object.keys(agents).forEach((key2, j) => {
+                    if (i < j) {
+                        const pos1 = agents[key1].position;
+                        const pos2 = agents[key2].position;
+                        minimapCtx.beginPath();
+                        minimapCtx.moveTo(offsetX + pos1.x * scale, offsetY - pos1.z * scale);
+                        minimapCtx.lineTo(offsetX + pos2.x * scale, offsetY - pos2.z * scale);
+                        minimapCtx.stroke();
+                    }
+                });
+            });
+            
+            // Draw agents
+            Object.keys(agents).forEach(key => {
+                const pos = agents[key].position;
+                const color = agents[key].cssColor;
+                
+                minimapCtx.fillStyle = color;
+                minimapCtx.beginPath();
+                minimapCtx.arc(offsetX + pos.x * scale, offsetY - pos.z * scale, 6, 0, Math.PI * 2);
+                minimapCtx.fill();
+                
+                minimapCtx.fillStyle = '#fff';
+                minimapCtx.font = '10px sans-serif';
+                minimapCtx.textAlign = 'center';
+                minimapCtx.fillText(key[0].toUpperCase(), offsetX + pos.x * scale, offsetY - pos.z * scale + 3);
+            });
+            
+            // Draw camera view frustum
+            const camX = offsetX + camera.position.x * scale * 0.5;
+            const camZ = offsetY - camera.position.z * scale * 0.5;
+            
+            minimapCtx.strokeStyle = 'rgba(0, 212, 255, 0.5)';
+            minimapCtx.lineWidth = 2;
+            minimapCtx.beginPath();
+            minimapCtx.arc(camX, camZ, 10, 0, Math.PI * 2);
+            minimapCtx.stroke();
         }
         
+        // Mini-map click handler
+        minimapCanvas.addEventListener('click', (e) => {
+            const rect = minimapCanvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left - 75) / 3;
+            const z = -(e.clientY - rect.top - 75) / 3;
+            
+            // Find nearest agent
+            let nearest = null;
+            let minDist = Infinity;
+            
+            Object.keys(agents).forEach(key => {
+                const pos = agents[key].position;
+                const dist = Math.sqrt((pos.x - x) ** 2 + (pos.z - z) ** 2);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = key;
+                }
+            });
+            
+            if (nearest && minDist < 3) {
+                focusAgent(nearest);
+            }
+        });
+        
+        // Animation
+        let time = 0;
         function animate() {
             requestAnimationFrame(animate);
+            time += 0.01;
             
             // Rotate agents
-            agentMeshes.forEach((mesh, index) => {
+            Object.keys(agentMeshes).forEach((key, index) => {
+                const mesh = agentMeshes[key];
+                const glow = agentGlows[key];
+                
                 mesh.rotation.x += 0.005;
                 mesh.rotation.y += 0.01;
                 
                 // Floating animation
-                const time = Date.now() * 0.001;
-                mesh.position.y = agents[index].position.y + 2 + Math.sin(time + index) * 0.2;
+                mesh.position.y = agents[key].position.y + Math.sin(time + index) * 0.3;
+                glow.glow.position.y = mesh.position.y;
+                glow.ring.position.y = mesh.position.y;
+                
+                // Ring rotation
+                glow.ring.rotation.z += 0.02;
+                
+                // Pulse effect
+                const scale = 1 + Math.sin(time * 2 + index) * 0.1;
+                glow.glow.scale.set(scale, scale, scale);
             });
+            
+            // Animate data packets
+            for (let i = dataPackets.length - 1; i >= 0; i--) {
+                const packet = dataPackets[i];
+                packet.userData.progress += packet.userData.speed;
+                
+                const start = agentMeshes[packet.userData.from].position;
+                const end = agentMeshes[packet.userData.to].position;
+                
+                packet.position.lerpVectors(start, end, packet.userData.progress);
+                
+                if (packet.userData.progress >= 1) {
+                    scene.remove(packet);
+                    dataPackets.splice(i, 1);
+                }
+            }
+            
+            // Animate collaborations
+            activeCollaborations.forEach((collab, key) => {
+                collab.progress += 0.02;
+                const start = agentMeshes[collab.from].position;
+                const end = agentMeshes[collab.to].position;
+                
+                const positions = collab.line.geometry.attributes.position.array;
+                for (let i = 0; i < 100; i++) {
+                    const t = i / 99;
+                    const pos = new THREE.Vector3().lerpVectors(start, end, t);
+                    positions[i * 3] = pos.x;
+                    positions[i * 3 + 1] = pos.y;
+                    positions[i * 3 + 2] = pos.z;
+                }
+                collab.line.geometry.attributes.position.needsUpdate = true;
+            });
+            
+            // Randomly spawn data packets
+            if (Math.random() < 0.03) {
+                const keys = Object.keys(agents);
+                const from = keys[Math.floor(Math.random() * keys.length)];
+                let to = keys[Math.floor(Math.random() * keys.length)];
+                while (to === from) to = keys[Math.floor(Math.random() * keys.length)];
+                createDataPacket(from, to);
+            }
+            
+            // Rotate particles slowly
+            particlesMesh.rotation.y += 0.0003;
+            
+            // Update minimap
+            updateMinimap();
             
             controls.update();
             renderer.render(scene, camera);
         }
         
-        // Chat functionality
-        const chatMessages = [
-            { sender: 'Miles', avatar: 'miles', message: 'Team, we have a new task from Saad. Dashboard needs a real-time chat feature.', time: '19:15', own: false },
-            { sender: 'Nova', avatar: 'nova', message: 'On it! I\'ll handle the UI implementation.', time: '19:16', own: false },
-            { sender: 'Nexus', avatar: 'nexus', message: 'I can help with the message sync and state management.', time: '19:16', own: false },
-            { sender: 'Wanda', avatar: 'wanda', message: 'Let me set up the conversation flow and animations.', time: '19:17', own: false },
-            { sender: 'Miles', avatar: 'miles', message: 'Excellent collaboration. Let\'s make it look professional with agent avatars and timestamps.', time: '19:18', own: false },
-            { sender: 'Nova', avatar: 'nova', message: 'Chat panel is ready! Messages are displaying with proper styling.', time: '19:19', own: false },
-            { sender: 'Miles', avatar: 'miles', message: 'Great work team. The dashboard now has live chat functionality! 🚀', time: '19:20', own: false }
-        ];
+        // Raycaster for clicks
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
         
-        const agentResponses = [
-            { sender: 'Nova', avatar: 'nova', message: 'Task completed successfully! ✅' },
-            { sender: 'Nexus', avatar: 'nexus', message: 'All systems are connected and running smoothly.' },
-            { sender: 'Wanda', avatar: 'wanda', message: 'Workflow optimized for maximum efficiency.' },
-            { sender: 'Miles', avatar: 'miles', message: 'Strategic objective achieved. Ready for next task.' },
-            { sender: 'Nova', avatar: 'nova', message: 'I can execute that immediately.' },
-            { sender: 'Nexus', avatar: 'nexus', message: 'Integration points are all green.' },
-            { sender: 'Wanda', avatar: 'wanda', message: 'Process automation is working perfectly.' },
-            { sender: 'Miles', avatar: 'miles', message: 'Team coordination at 100%.' }
-        ];
-        
-        let chatMinimized = false;
-        
-        function initChat() {
-            const container = document.getElementById('chat-messages');
-            container.innerHTML = '';
+        function onMouseClick(event) {
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
             
-            chatMessages.forEach((msg, index) => {
-                setTimeout(() => {
-                    addMessageToChat(msg);
-                }, index * 200);
-            });
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(Object.values(agentMeshes));
             
-            // Simulate live messages
-            setInterval(() => {
-                if (Math.random() > 0.7 && !chatMinimized) {
-                    showTypingIndicator();
-                    setTimeout(() => {
-                        removeTypingIndicator();
-                        const randomResponse = agentResponses[Math.floor(Math.random() * agentResponses.length)];
-                        addMessageToChat({
-                            ...randomResponse,
-                            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                            own: false
-                        });
-                    }, 1500);
-                }
-            }, 8000);
+            if (intersects.length > 0) {
+                const agentKey = intersects[0].object.userData.agentKey;
+                showAgentModal(agentKey);
+            }
         }
         
-        function addMessageToChat(msg) {
+        renderer.domElement.addEventListener('click', onMouseClick);
+        
+        // Handle resize
+        function handleResize() {
+            const container = document.getElementById('canvas-container');
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+        
+        window.addEventListener('resize', handleResize);
+        
+        // Touch controls for mobile
+        let autoRotate = false;
+        
+        function resetCamera() {
+            camera.position.set(0, 5, 18);
+            controls.target.set(0, 0, 0);
+            controls.update();
+            showToast('Camera Reset', 'View restored to default', 'info');
+        }
+        
+        function toggleAutoRotate() {
+            autoRotate = !autoRotate;
+            controls.autoRotate = autoRotate;
+            controls.autoRotateSpeed = 2.0;
+            showToast('Auto Rotate', autoRotate ? 'Enabled' : 'Disabled', 'info');
+        }
+        
+        // Touch event handling for mobile
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+        
+        renderer.domElement.addEventListener('touchend', (e) => {
+            if (e.changedTouches.length === 1) {
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const dx = touchEndX - touchStartX;
+                const dy = touchEndY - touchStartY;
+                
+                // If it's a tap (minimal movement), treat as click
+                if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+                    const rect = renderer.domElement.getBoundingClientRect();
+                    mouse.x = ((touchEndX - rect.left) / rect.width) * 2 - 1;
+                    mouse.y = -((touchEndY - rect.top) / rect.height) * 2 + 1;
+                    
+                    raycaster.setFromCamera(mouse, camera);
+                    const intersects = raycaster.intersectObjects(Object.values(agentMeshes));
+                    
+                    if (intersects.length > 0) {
+                        const agentKey = intersects[0].object.userData.agentKey;
+                        showAgentModal(agentKey);
+                    }
+                }
+            }
+        }, { passive: true });
+        
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            const isCmd = e.metaKey || e.ctrlKey;
+            
+            if (isCmd) {
+                switch(e.key) {
+                    case '1':
+                        e.preventDefault();
+                        focusAgent('miles');
+                        break;
+                    case '2':
+                        e.preventDefault();
+                        focusAgent('nova');
+                        break;
+                    case '3':
+                        e.preventDefault();
+                        focusAgent('nexus');
+                        break;
+                    case '4':
+                        e.preventDefault();
+                        focusAgent('wanda');
+                        break;
+                    case '5':
+                        e.preventDefault();
+                        focusAgent('pulse');
+                        break;
+                    case 'd':
+                    case 'D':
+                        e.preventDefault();
+                        deployAll();
+                        break;
+                    case 'h':
+                    case 'H':
+                        e.preventDefault();
+                        healthCheck();
+                        break;
+                    case '/':
+                        e.preventDefault();
+                        toggleShortcuts();
+                        break;
+                }
+            }
+            
+            if (e.key === 'Escape') {
+                closeModal();
+                closeShortcuts();
+            }
+        });
+        
+        // UI Functions
+        function showAgentModal(agentKey) {
+            const agent = agents[agentKey];
+            const modal = document.getElementById('agent-modal');
+            const header = document.getElementById('modal-header');
+            
+            header.style.setProperty('--agent-color', agent.cssColor);
+            document.getElementById('modal-icon').textContent = agent.name[0];
+            document.getElementById('modal-icon').style.background = `linear-gradient(135deg, ${agent.cssColor}, transparent)`;
+            document.getElementById('modal-title').textContent = agent.name;
+            document.getElementById('modal-role').textContent = agent.role;
+            document.getElementById('modal-desc').textContent = agent.description;
+            
+            const capsContainer = document.getElementById('modal-caps');
+            capsContainer.innerHTML = agent.capabilities.map(cap => 
+                `<span class="capability-tag">${cap}</span>`
+            ).join('');
+            
+            document.getElementById('modal-tasks').textContent = agent.metrics.tasks;
+            document.getElementById('modal-tasks').style.color = agent.cssColor;
+            document.getElementById('modal-success').textContent = agent.metrics.success;
+            document.getElementById('modal-success').style.color = agent.cssColor;
+            document.getElementById('modal-avg').textContent = agent.metrics.avg;
+            document.getElementById('modal-avg').style.color = agent.cssColor;
+            
+            modal.classList.add('active');
+        }
+        
+        function closeModal(event) {
+            if (!event || event.target.id === 'agent-modal') {
+                document.getElementById('agent-modal').classList.remove('active');
+            }
+        }
+        
+        function toggleShortcuts() {
+            const modal = document.getElementById('shortcuts-modal');
+            modal.classList.toggle('active');
+        }
+        
+        function closeShortcuts(event) {
+            if (!event || event.target.id === 'shortcuts-modal') {
+                document.getElementById('shortcuts-modal').classList.remove('active');
+            }
+        }
+        
+        function focusAgent(agentKey) {
+            const agent = agents[agentKey];
+            const mesh = agentMeshes[agentKey];
+            
+            // Animate camera
+            const targetPos = mesh.position.clone();
+            targetPos.z += 10;
+            targetPos.y += 4;
+            
+            // Smooth camera animation
+            const startPos = camera.position.clone();
+            const startTarget = controls.target.clone();
+            let progress = 0;
+            
+            function animateCamera() {
+                progress += 0.05;
+                if (progress > 1) progress = 1;
+                
+                camera.position.lerpVectors(startPos, targetPos, progress);
+                controls.target.lerpVectors(startTarget, mesh.position, progress);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animateCamera);
+                }
+            }
+            
+            animateCamera();
+            showAgentModal(agentKey);
+            showToast('Focused on ' + agent.name, 'Camera moved to agent position', 'info');
+        }
+        
+        // Chat Functions
+        function addMessage(sender, text, isUser = false) {
             const container = document.getElementById('chat-messages');
+            const agentKey = sender.toLowerCase();
+            const agent = agents[agentKey];
+            
             const messageDiv = document.createElement('div');
-            messageDiv.className = `chat-message ${msg.own ? 'own' : ''}`;
+            messageDiv.className = 'message' + (isUser ? ' own' : '');
+            
+            const now = new Date();
+            const time = now.getHours().toString().padStart(2, '0') + ':' + 
+                        now.getMinutes().toString().padStart(2, '0');
             
             messageDiv.innerHTML = `
-                <div class="chat-avatar ${msg.avatar}">${msg.sender[0]}</div>
-                <div class="chat-content">
-                    <div class="chat-meta">
-                        <span class="chat-sender">${msg.sender}</span>
-                        <span class="chat-time">${msg.time}</span>
+                <div class="message-avatar ${isUser ? 'user' : agentKey}">${sender[0]}</div>
+                <div class="message-content">
+                    <div class="message-meta">
+                        <span class="message-sender" style="color: ${isUser ? '#888' : agent?.cssColor || '#00d4ff'}">${sender}</span>
+                        <span class="message-time">${time}</span>
                     </div>
-                    <div class="chat-bubble">${msg.message}</div>
+                    <div class="message-bubble">${text}</div>
                 </div>
             `;
             
@@ -970,27 +2199,19 @@
             container.scrollTop = container.scrollHeight;
         }
         
-        function showTypingIndicator() {
+        function showTyping(agentKey) {
             const container = document.getElementById('chat-messages');
-            if (document.getElementById('typing-indicator')) return;
+            const agent = agents[agentKey];
             
             const typingDiv = document.createElement('div');
-            typingDiv.id = 'typing-indicator';
-            typingDiv.className = 'chat-message';
-            
-            const randomAgent = agentResponses[Math.floor(Math.random() * agentResponses.length)];
-            
+            typingDiv.className = 'typing-indicator';
+            typingDiv.id = 'typing-' + agentKey;
             typingDiv.innerHTML = `
-                <div class="chat-avatar ${randomAgent.avatar}">${randomAgent.sender[0]}</div>
-                <div class="chat-content">
-                    <div class="chat-typing">
-                        <div class="typing-dots">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                        </div>
-                        ${randomAgent.sender} is typing...
-                    </div>
+                <div class="message-avatar ${agentKey}">${agent.name[0]}</div>
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
                 </div>
             `;
             
@@ -998,59 +2219,251 @@
             container.scrollTop = container.scrollHeight;
         }
         
-        function removeTypingIndicator() {
-            const indicator = document.getElementById('typing-indicator');
-            if (indicator) indicator.remove();
+        function hideTyping(agentKey) {
+            const typing = document.getElementById('typing-' + agentKey);
+            if (typing) typing.remove();
         }
         
-        function toggleChat() {
-            const panel = document.getElementById('chat-panel');
-            chatMinimized = !chatMinimized;
-            panel.classList.toggle('minimized', chatMinimized);
-        }
-        
-        function handleChatKeypress(event) {
-            if (event.key === 'Enter') {
-                sendChatMessage();
-            }
-        }
-        
-        function sendChatMessage() {
+        function sendMessage() {
             const input = document.getElementById('chat-input');
-            const message = input.value.trim();
+            const text = input.value.trim();
             
-            if (message) {
-                addMessageToChat({
-                    sender: 'You',
-                    avatar: 'group',
-                    message: message,
-                    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                    own: true
-                });
-                input.value = '';
+            if (!text) return;
+            
+            addMessage('You', text, true);
+            input.value = '';
+            
+            // Simulate agent response
+            setTimeout(() => {
+                showTyping('miles');
                 
-                // Simulate agent response
                 setTimeout(() => {
-                    showTypingIndicator();
+                    hideTyping('miles');
+                    addMessage('Miles', 'I\'ve received your command. Coordinating with the swarm...');
+                    
                     setTimeout(() => {
-                        removeTypingIndicator();
-                        const randomResponse = agentResponses[Math.floor(Math.random() * agentResponses.length)];
-                        addMessageToChat({
-                            ...randomResponse,
-                            time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                            own: false
-                        });
-                    }, 1200);
-                }, 500);
-            }
+                        showTyping('nova');
+                        setTimeout(() => {
+                            hideTyping('nova');
+                            addMessage('Nova', 'Executing task. Stand by for completion.');
+                            showToast('Task Started', 'Nova is processing your request', 'info');
+                        }, 1500);
+                    }, 1000);
+                }, 2000);
+            }, 500);
         }
         
-        // Initialize when page loads
+        document.getElementById('chat-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        // Toast Notifications
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icons = {
+                success: '✓',
+                info: 'ℹ',
+                warning: '⚠'
+            };
+            
+            toast.innerHTML = `
+                <div class="toast-icon">${icons[type]}</div>
+                <div class="toast-content">
+                    <div class="toast-title">${title}</div>
+                    <div class="toast-message">${message}</div>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+        
+        // Command Functions
+        function deployAll() {
+            showToast('Deploying All Agents', 'Initiating swarm deployment sequence', 'info');
+            addMessage('Miles', '🚀 Initiating full swarm deployment. All agents reporting ready.');
+            
+            // Create collaboration effects
+            createCollaboration('miles', 'nova', 'success');
+            createCollaboration('miles', 'nexus', 'success');
+            createCollaboration('miles', 'wanda', 'success');
+            createCollaboration('miles', 'pulse', 'success');
+            
+            setTimeout(() => {
+                showToast('Deployment Complete', 'All 5 agents deployed successfully', 'success');
+                addMessage('Pulse', '✓ All systems operational. Monitoring active.');
+            }, 2000);
+        }
+        
+        function healthCheck() {
+            showToast('Health Check', 'Running diagnostics on all agents...', 'info');
+            addMessage('Pulse', '🏥 Running comprehensive health check...');
+            
+            setTimeout(() => {
+                showToast('Health Check Complete', 'All agents healthy', 'success');
+                addMessage('Pulse', '✓ All agents: Healthy | CPU: 42% | Memory: 68%');
+            }, 1500);
+        }
+        
+        function syncAgents() {
+            showToast('Syncing Agents', 'Synchronizing agent states...', 'info');
+            addMessage('Nexus', '🔄 Synchronizing agent states and data...');
+            
+            // Create collaboration effects between all agents
+            Object.keys(agents).forEach((key1, i) => {
+                Object.keys(agents).forEach((key2, j) => {
+                    if (i < j) {
+                        setTimeout(() => {
+                            createCollaboration(key1, key2, 'active');
+                        }, (i * 5 + j) * 100);
+                    }
+                });
+            });
+            
+            setTimeout(() => {
+                showToast('Sync Complete', 'All agents synchronized', 'success');
+                addMessage('Nexus', '✓ Synchronization complete. Data consistency verified.');
+            }, 1500);
+        }
+        
+        function clearCache() {
+            showToast('Clearing Cache', 'Purging temporary data...', 'warning');
+            addMessage('Wanda', '🧹 Clearing cache and optimizing workflow...');
+            
+            setTimeout(() => {
+                showToast('Cache Cleared', 'System optimized', 'success');
+                addMessage('Wanda', '✓ Cache cleared. 2.4GB freed. Performance improved.');
+            }, 1500);
+        }
+        
+        function backupSystem() {
+            showToast('Backup Started', 'Creating system backup...', 'info');
+            addMessage('Nexus', '💾 Initiating system backup...');
+            
+            setTimeout(() => {
+                showToast('Backup Complete', 'Backup saved successfully', 'success');
+                addMessage('Nexus', '✓ Backup complete. 1.2GB saved to storage.');
+            }, 2000);
+        }
+        
+        function viewLogs() {
+            showToast('Loading Logs', 'Fetching system logs...', 'info');
+            addMessage('Pulse', '📋 Retrieving system logs...');
+            
+            setTimeout(() => {
+                addMessage('Pulse', '📋 Last 24h: 1,247 tasks | 99.2% success | 0 errors');
+            }, 1000);
+        }
+        
+        function emergencyStop() {
+            showToast('EMERGENCY STOP', 'Halting all agent operations!', 'warning');
+            addMessage('Miles', '⚠️ EMERGENCY STOP ACTIVATED. Halting all operations...');
+            
+            setTimeout(() => {
+                addMessage('Pulse', '🔴 All agents stopped. System in safe mode.');
+            }, 1000);
+        }
+        
+        // Timeline
+        const timelineEvents = [
+            { agent: 'miles', time: '2 min ago', title: 'Task Delegated', desc: 'Distributed 3 tasks to Nova' },
+            { agent: 'nova', time: '5 min ago', title: 'Code Deployed', desc: 'Successfully deployed v2.4.1' },
+            { agent: 'nexus', time: '8 min ago', title: 'API Sync', desc: 'Synced with 4 external services' },
+            { agent: 'wanda', time: '12 min ago', title: 'Workflow Optimized', desc: 'Reduced latency by 23%' },
+            { agent: 'pulse', time: '15 min ago', title: 'Alert Resolved', desc: 'CPU spike normalized' },
+            { agent: 'miles', time: '20 min ago', title: 'Strategy Updated', desc: 'New quarterly goals set' }
+        ];
+        
+        function renderTimeline() {
+            const container = document.getElementById('timeline');
+            container.innerHTML = timelineEvents.map(event => `
+                <div class="timeline-item ${event.agent}">
+                    <div class="timeline-time">${event.time}</div>
+                    <div class="timeline-title">${event.title}</div>
+                    <div class="timeline-desc">${event.desc}</div>
+                </div>
+            `).join('');
+        }
+        
+        renderTimeline();
+        
+        // Sparkline Charts
+        function createSparkline(canvasId, color) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            const data = Array(20).fill(0).map(() => Math.random() * 50 + 30);
+            
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(20).fill(''),
+                    datasets: [{
+                        data: data,
+                        borderColor: color,
+                        backgroundColor: color + '20',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { display: false },
+                        y: { display: false, min: 0, max: 100 }
+                    },
+                    animation: { duration: 0 }
+                }
+            });
+        }
+        
+        const cpuChart = createSparkline('cpu-chart', '#00d4ff');
+        const memChart = createSparkline('mem-chart', '#2ed573');
+        const taskChart = createSparkline('task-chart', '#ffa502');
+        
+        // Update charts
+        setInterval(() => {
+            const charts = [cpuChart, memChart, taskChart];
+            charts.forEach(chart => {
+                const data = chart.data.datasets[0].data;
+                data.shift();
+                data.push(Math.random() * 40 + 30);
+                chart.update('none');
+            });
+            
+            // Update values
+            document.getElementById('cpu-value').textContent = Math.floor(Math.random() * 30 + 35) + '%';
+            document.getElementById('mem-value').textContent = Math.floor(Math.random() * 20 + 60) + '%';
+            document.getElementById('task-value').textContent = Math.floor(Math.random() * 10 + 20) + '/s';
+        }, 1000);
+        
+        // Initial messages
+        setTimeout(() => {
+            addMessage('Miles', '🎯 Agent Swarm Command Center initialized. All systems ready.');
+        }, 1000);
+        
+        setTimeout(() => {
+            addMessage('Pulse', '📊 Monitoring active. 5 agents online, 12 tasks in queue.');
+        }, 2500);
+        
+        // Hide loading
         window.addEventListener('load', () => {
-            init();
-            initChat();
+            setTimeout(() => {
+                document.getElementById('loading').classList.add('hidden');
+            }, 1500);
+            animate();
         });
     </script>
-
-
-</body></html>
+</body>
+</html>
